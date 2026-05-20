@@ -37,13 +37,19 @@ export default function InputGame() {
   };
 
   const handleOpponentSelect = (seat, opponentSeat) => {
-    setMatchups((prev) =>
-      prev.map((m) => {
+    setMatchups((prev) => {
+      const prevMe = prev.find((m) => m.seat === seat);
+      const myOldOpponent = prevMe?.opponentSeat;
+
+      const updated = prev.map((m) => {
         if (m.seat === seat) return { ...m, opponentSeat };
-        if (m.opponentSeat === seat) return { ...m, opponentSeat: null };
+        if (m.seat === opponentSeat) return { ...m, opponentSeat: seat };
+        if (m.seat === myOldOpponent) return { ...m, opponentSeat: null };
         return m;
-      })
-    );
+      });
+
+      return updated;
+    });
   };
 
   const handleGhostToggle = (seat) => {
@@ -220,6 +226,25 @@ export default function InputGame() {
                   !eliminatedThisRound.includes(ap.seat)
               );
 
+              const pairedWithOthers = new Set(
+                matchups
+                  .filter((m) => m.seat !== mu.seat && m.opponentSeat !== null)
+                  .map((m) => m.opponentSeat)
+              );
+
+              const takenSeats = new Set();
+              for (const m of matchups) {
+                if (m.seat === mu.seat) continue;
+                if (m.opponentSeat !== null) {
+                  takenSeats.add(m.seat);
+                  takenSeats.add(m.opponentSeat);
+                }
+              }
+
+              const filteredOpponents = availableOpponents.filter(
+                (ap) => !takenSeats.has(ap.seat) || ap.seat === mu.opponentSeat
+              );
+
               return (
                 <div
                   key={mu.seat}
@@ -269,7 +294,7 @@ export default function InputGame() {
                       className="w-full bg-surface-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary transition-colors"
                     >
                       <option value="">Select opponent...</option>
-                      {availableOpponents.map((ap) => (
+                      {filteredOpponents.map((ap) => (
                         <option key={ap.seat} value={ap.seat}>
                           S{ap.seat}: {players.find((p) => p.seat === ap.seat)?.name}
                         </option>
