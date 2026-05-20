@@ -70,28 +70,57 @@ export default function InputGame() {
   });
 
   const ghostCount = matchups.filter((m) => m.isGhost).length;
+  const isOddActive = activePlayers.length % 2 !== 0;
+  const ghostValidationOk = !isOddActive || ghostCount === 1;
 
   const handleAddRound = () => {
     const matchupPairs = [];
     const processed = new Set();
+    const eliminatedSeats = [1, 2, 3, 4, 5, 6, 7, 8].filter(
+      (s) => !activePlayers.find((p) => p.seat === s)
+    );
+    let ghostSlotIdx = 0;
 
     for (const m of matchups) {
       if (eliminatedThisRound.includes(m.seat)) continue;
       if (processed.has(m.seat)) continue;
 
       const seatA = m.seat;
-      const seatB = m.opponentSeat;
+      let seatB = m.opponentSeat;
       const ghostA = m.isGhost;
-      const ghostB = matchups.find((x) => x.seat === seatB)?.isGhost || false;
+      let ghostB = false;
+      let ghostCopyOf = null;
+
+      if (m.isGhost) {
+        ghostB = true;
+        ghostCopyOf = seatB;
+        if (ghostSlotIdx < eliminatedSeats.length) {
+          seatB = eliminatedSeats[ghostSlotIdx];
+          ghostSlotIdx++;
+        }
+      } else {
+        const opponentRow = matchups.find((x) => x.seat === seatB);
+        ghostB = opponentRow?.isGhost || false;
+        if (ghostB) {
+          ghostCopyOf = seatA;
+          if (ghostSlotIdx < eliminatedSeats.length) {
+            const realOpp = seatB;
+            seatB = eliminatedSeats[ghostSlotIdx];
+            ghostSlotIdx++;
+            ghostCopyOf = realOpp;
+          }
+        }
+      }
 
       processed.add(seatA);
-      processed.add(seatB);
+      processed.add(m.opponentSeat);
 
       matchupPairs.push({
         seatA,
         seatB,
         isGhostA: ghostA,
         isGhostB: ghostB,
+        ghostCopyOf,
       });
     }
 
@@ -194,7 +223,14 @@ export default function InputGame() {
           <h1 className="text-2xl font-bold text-white">Record Rounds</h1>
           <p className="text-gray-400 text-sm mt-1">
             Round {currentRound} &mdash; {activePlayers.length} players active
-            {ghostCount > 0 && <span className="text-ghost ml-2">({ghostCount} ghost{ghostCount > 1 ? 's' : ''})</span>}
+            {isOddActive && (
+              <span className="text-ghost ml-2">
+                &bull; 1 ghost required ({ghostCount} checked)
+              </span>
+            )}
+            {!isOddActive && ghostCount > 0 && (
+              <span className="text-yellow-400 ml-2">&bull; Ghost checked but not needed</span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -224,12 +260,6 @@ export default function InputGame() {
                 (ap) =>
                   ap.seat !== mu.seat &&
                   !eliminatedThisRound.includes(ap.seat)
-              );
-
-              const pairedWithOthers = new Set(
-                matchups
-                  .filter((m) => m.seat !== mu.seat && m.opponentSeat !== null)
-                  .map((m) => m.opponentSeat)
               );
 
               const takenSeats = new Set();
@@ -265,14 +295,14 @@ export default function InputGame() {
                       <span className="text-red-400 text-xs font-medium">Eliminated</span>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1.5 cursor-pointer">
+                        <label className="flex items-center gap-1.5 cursor-pointer" title="Check if opponent is a ghost/mirror copy">
                           <input
                             type="checkbox"
                             checked={mu.isGhost}
                             onChange={() => handleGhostToggle(mu.seat)}
                             className="w-3.5 h-3.5 accent-ghost rounded"
                           />
-                          <span className="text-xs text-gray-400">Ghost</span>
+                          <span className="text-xs text-gray-400">Mirror</span>
                         </label>
                         <label className="flex items-center gap-1.5 cursor-pointer">
                           <input
@@ -343,7 +373,12 @@ export default function InputGame() {
                   {r.matchups.map((m) => {
                     const aName = players.find((p) => p.seat === m.seatA)?.name || `S${m.seatA}`;
                     const bName = players.find((p) => p.seat === m.seatB)?.name || `S${m.seatB}`;
-                    return `${aName} vs ${bName}${m.isGhostA ? ' (G)' : ''}${m.isGhostB ? ' (G)' : ''}`;
+                    const ghostNote = m.isGhostA
+                      ? ` (mirror from S${m.seatB})`
+                      : m.isGhostB
+                      ? ` (mirror from S${m.seatA})`
+                      : '';
+                    return `${aName} vs ${bName}${ghostNote}`;
                   }).join(', ')}
                 </span>
                 {r.eliminations.length > 0 && (
@@ -366,9 +401,9 @@ export default function InputGame() {
         </button>
         <button
           onClick={handleAddRound}
-          disabled={!allMatchupsSet && eliminatedThisRound.length === 0}
+          disabled={!allMatchupsSet || !ghostValidationOk}
           className={`px-6 py-2.5 rounded-lg font-medium transition-colors text-sm ${
-            allMatchupsSet || eliminatedThisRound.length > 0
+            allMatchupsSet && ghostValidationOk
               ? 'bg-primary hover:bg-primary-dark text-white'
               : 'bg-gray-700 text-gray-500 cursor-not-allowed'
           }`}
