@@ -4,7 +4,7 @@ import { addGame } from '../store/gameStore';
 import { getActivePlayers } from '../algorithm/utils';
 import SeatGrid from '../components/SeatGrid';
 
-const DEFAULT_PLAYER_NAME = ['Player 1', 'Player 2', 'Player 3', 'Player 4', 'Player 5', 'Player 6', 'Player 7', 'Player 8'];
+const DEFAULT_PLAYER_NAME = ['', '', '', '', '', '', '', ''];
 const SEATS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export default function InputGame() {
