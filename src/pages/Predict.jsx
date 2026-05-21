@@ -1,42 +1,27 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { loadGames, getGame } from '../store/gameStore';
+import { loadGames } from '../store/gameStore';
 import { getPredictionSummary } from '../algorithm/predictor';
 import { getActivePlayers, getEliminatedPlayers } from '../algorithm/utils';
-import { buildMatchupMatrix } from '../algorithm/patternDiscovery';
 
 export default function Predict() {
   const [searchParams] = useSearchParams();
   const preselectedId = searchParams.get('id');
-
-  const [games, setGames] = useState([]);
   const [selectedGameId, setSelectedGameId] = useState(preselectedId || '');
   const [roundNumber, setRoundNumber] = useState(1);
   const [predictions, setPredictions] = useState(null);
-  const [showMethod, setShowMethod] = useState('hybrid');
+
+  const allGames = useMemo(() => loadGames(), []);
 
   useEffect(() => {
-    const allGames = loadGames();
-    setGames(allGames);
     if (!preselectedId && allGames.length > 0 && !selectedGameId) {
       setSelectedGameId(allGames[0].id);
     }
-  }, [preselectedId, selectedGameId]);
+  }, [allGames, preselectedId, selectedGameId]);
 
   const selectedGame = useMemo(() => {
-    if (!selectedGameId) return null;
     return allGames.find((g) => g.id === selectedGameId) || null;
   }, [selectedGameId, allGames]);
-
-  // Sync games list
-  useEffect(() => {
-    setGames(loadGames());
-  }, []);
-
-  const allGames = useMemo(() => {
-    const loaded = loadGames();
-    return loaded;
-  }, []);
 
   const activePlayers = useMemo(() => {
     if (!selectedGame) return [];
@@ -48,23 +33,9 @@ export default function Predict() {
     return getEliminatedPlayers(selectedGame.players, roundNumber - 1);
   }, [selectedGame, roundNumber]);
 
-  const maxRound = useMemo(() => {
-    if (!selectedGame) return 1;
-    const maxR = selectedGame.rounds?.length || 0;
-    return maxR > 0 ? maxR : 1;
-  }, [selectedGame]);
-
-  const allGameData = useMemo(() => allGames, [allGames]);
-
   const handlePredict = () => {
     if (!selectedGame) return;
-
-    const activeSeats = activePlayers.map((p) => p.seat);
-    const eliminatedSeats = [1, 2, 3, 4, 5, 6, 7, 8].filter(
-      (s) => !activeSeats.includes(s)
-    );
-
-    const allGamesExcept = allGameData.filter((g) => g.id !== selectedGame.id);
+    const allGamesExcept = allGames.filter((g) => g.id !== selectedGame.id);
     const preds = getPredictionSummary(allGamesExcept, activePlayers, roundNumber);
 
     const enriched = preds.map((p) => {
@@ -83,15 +54,15 @@ export default function Predict() {
 
       return {
         ...p,
-        playerName: player?.name || `Player ${p.seat}`,
+        playerName: player?.name || `P${p.seat}`,
         actualOpponent,
         opponentName: actualOpponent
-          ? selectedGame.players.find((pl) => pl.seat === actualOpponent)?.name || `Player ${actualOpponent}`
+          ? selectedGame.players.find((pl) => pl.seat === actualOpponent)?.name || `S${actualOpponent}`
           : null,
         wasCorrect,
         predictedName: p.predictedOpponent
-          ? selectedGame.players.find((pl) => pl.seat === p.predictedOpponent)?.name || `Player ${p.predictedOpponent}`
-          : 'Unknown',
+          ? selectedGame.players.find((pl) => pl.seat === p.predictedOpponent)?.name || `S${p.predictedOpponent}`
+          : '???',
       };
     });
 
@@ -102,83 +73,72 @@ export default function Predict() {
     if (!predictions) return null;
     const evaluable = predictions.filter((p) => p.wasCorrect !== null);
     if (evaluable.length === 0) return null;
-    const correct = evaluable.filter((p) => p.wasCorrect).length;
-    return Math.round((correct / evaluable.length) * 100);
+    return Math.round((evaluable.filter((p) => p.wasCorrect).length / evaluable.length) * 100);
   }, [predictions]);
 
   if (allGames.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-16">
-        <p className="text-5xl mb-4">🔮</p>
-        <h1 className="text-2xl font-bold text-white mb-2">No Game Data</h1>
-        <p className="text-gray-400 mb-4">Record at least one game to start predicting opponents.</p>
-        <a
-          href="/input"
-          className="inline-block px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors"
-        >
-          Record Game First
+      <div style={{ maxWidth: 500, margin: '0 auto', textAlign: 'center', paddingTop: 60 }}>
+        <div style={{ fontSize: '3rem', marginBottom: 12 }}>🔮</div>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+          NO DATA
+        </h1>
+        <p style={{ color: '#666', fontSize: '0.75rem', marginBottom: 20 }}>
+          RECORD AT LEAST ONE GAME FIRST
+        </p>
+        <a href="/input" className="brutal-btn brutal-btn-neon" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          RECORD GAME
         </a>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-6">Predict Next Opponent</h1>
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <h1 style={{ fontSize: '1.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, margin: '0 0 24px', color: '#fff' }}>
+        PREDICT OPPONENT
+      </h1>
 
-      <div className="bg-surface border border-gray-700 rounded-xl p-6 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div className="brutal-card" style={{ padding: 22, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 12, alignItems: 'end' }}>
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">Select Game</label>
+            <label style={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 6 }}>
+              GAME
+            </label>
             <select
               value={selectedGameId}
-              onChange={(e) => {
-                setSelectedGameId(e.target.value);
-                setPredictions(null);
-              }}
-              className="w-full bg-surface-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary"
+              onChange={(e) => { setSelectedGameId(e.target.value); setPredictions(null); }}
+              className="brutal-select"
             >
-              {allGameData.map((g, idx) => (
-                <option key={g.id} value={g.id}>
-                  Game #{idx + 1} ({new Date(g.createdAt).toLocaleDateString()})
-                </option>
+              {allGames.map((g, idx) => (
+                <option key={g.id} value={g.id}>GAME #{idx + 1}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">Round Number</label>
+            <label style={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 6 }}>
+              ROUND
+            </label>
             <input
               type="number"
               min={1}
-              max={Math.max(maxRound + 1, 30)}
+              max={30}
               value={roundNumber}
-              onChange={(e) => {
-                setRoundNumber(parseInt(e.target.value) || 1);
-                setPredictions(null);
-              }}
-              className="w-full bg-surface-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary"
+              onChange={(e) => { setRoundNumber(parseInt(e.target.value) || 1); setPredictions(null); }}
+              className="brutal-input"
             />
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={handlePredict}
-              className="w-full px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors text-sm"
-            >
-              Predict Round {roundNumber}
-            </button>
-          </div>
+          <button onClick={handlePredict} className="brutal-btn brutal-btn-neon brutal-btn-sm" style={{ boxShadow: '3px 3px 0 var(--color-neon-green)' }}>
+            PREDICT
+          </button>
         </div>
 
         {selectedGame && (
-          <div className="flex flex-wrap gap-2 text-sm">
-            <span className="text-gray-400">
-              Active: {activePlayers.length} players
-            </span>
-            <span className="text-gray-400">
-              Eliminated: {eliminatedPlayers.length} players
-            </span>
-            <span className="text-gray-400">
-              Ghost needed: {activePlayers.length % 2 !== 0 ? 'Yes' : 'No'}
+          <div style={{ display: 'flex', gap: 20, marginTop: 14, fontSize: '0.68rem', color: '#888' }}>
+            <span style={{ color: 'var(--color-neon-green)' }}>{activePlayers.length} ACTIVE</span>
+            <span style={{ color: '#ff3333' }}>{eliminatedPlayers.length} ELIMINATED</span>
+            <span style={{ color: 'var(--color-neon-purple)' }}>
+              {activePlayers.length % 2 !== 0 ? 'GHOST REQUIRED' : 'NO GHOST'}
             </span>
           </div>
         )}
@@ -187,102 +147,72 @@ export default function Predict() {
       {predictions && (
         <>
           {accuracy !== null && (
-            <div className={`mb-6 rounded-xl p-4 border ${accuracy >= 70 ? 'bg-green-900/20 border-green-800' : accuracy >= 40 ? 'bg-yellow-900/20 border-yellow-800' : 'bg-red-900/20 border-red-800'}`}>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold text-white">{accuracy}%</span>
-                <span className="text-sm text-gray-300">Prediction Accuracy (evaluated on recorded rounds)</span>
-              </div>
+            <div style={{
+              marginBottom: 20, padding: '14px 20px', border: '3px solid',
+              borderColor: accuracy >= 70 ? 'var(--color-neon-green)' : accuracy >= 40 ? 'var(--color-neon-yellow)' : '#ff3333',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <span style={{ fontSize: '1.8rem', fontWeight: 800 }}>{accuracy}%</span>
+              <span style={{ fontSize: '0.7rem', color: '#aaa', textTransform: 'uppercase' }}>PREDICTION ACCURACY</span>
             </div>
           )}
 
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {predictions.map((pred) => (
               <div
                 key={pred.seat}
-                className={`bg-surface border rounded-xl p-5 transition-colors ${
-                  pred.wasCorrect === true
-                    ? 'border-green-700 bg-green-900/10'
-                    : pred.wasCorrect === false
-                    ? 'border-red-700 bg-red-900/10'
-                    : 'border-gray-700'
-                }`}
+                className="brutal-card"
+                style={{
+                  borderColor: pred.wasCorrect === true ? 'var(--color-neon-green)' : pred.wasCorrect === false ? '#ff3333' : '#fff',
+                  padding: 18,
+                }}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-surface-light text-sm font-bold text-white">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 32, height: 32, border: '3px solid #fff', fontWeight: 800, fontSize: '0.8rem',
+                    }}>
                       {pred.seat}
                     </span>
-                    <div>
-                      <span className="text-white font-medium">{pred.playerName}</span>
-                      <span className="text-gray-500 text-xs ml-2">
-                        Seat {pred.seat}
-                      </span>
-                    </div>
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{pred.playerName}</span>
                   </div>
-
-                  <div className="flex items-center gap-3">
+                  <div style={{ display: 'flex', gap: 8 }}>
                     {pred.wasCorrect === true && (
-                      <span className="text-green-400 text-xs font-medium bg-green-900/30 px-2 py-0.5 rounded">
-                        Correct
-                      </span>
+                      <span className="brutal-badge" style={{ color: 'var(--color-neon-green)', borderColor: 'var(--color-neon-green)' }}>CORRECT</span>
                     )}
                     {pred.wasCorrect === false && (
-                      <span className="text-red-400 text-xs font-medium bg-red-900/30 px-2 py-0.5 rounded">
-                        Incorrect
-                      </span>
+                      <span className="brutal-badge" style={{ color: '#ff3333', borderColor: '#ff3333' }}>WRONG</span>
                     )}
-
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded font-medium ${
-                        pred.method === 'historical' || pred.method === 'data'
-                          ? 'bg-primary/20 text-primary'
-                          : pred.method === 'standard'
-                          ? 'bg-accent/20 text-accent'
-                          : pred.method === 'ghost'
-                          ? 'bg-ghost/20 text-ghost'
-                          : 'bg-gray-700 text-gray-400'
-                      }`}
-                    >
-                      {pred.method}
+                    <span className="brutal-badge" style={{ color: '#888', borderColor: '#888' }}>
+                      {pred.method?.toUpperCase()}
                     </span>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="bg-surface-dark rounded-lg p-3">
-                    <p className="text-xs text-gray-400 mb-1">Predicted Opponent</p>
-                    <p className="text-white font-medium">
-                      {pred.predictedName || 'Unknown'}
-                      {pred.confidence > 0 && (
-                        <span className="text-xs text-gray-400 ml-2">
-                          ({Math.round(pred.confidence)}% confidence)
-                        </span>
-                      )}
-                    </p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ border: '2px solid #333', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: '#888', marginBottom: 4 }}>PREDICTED</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.85rem' }}>
+                      {pred.predictedName}
+                      <span style={{ fontSize: '0.65rem', color: '#666', marginLeft: 6 }}>
+                        ({Math.round(pred.confidence)}%)
+                      </span>
+                    </div>
                   </div>
-                  {pred.actualOpponent !== undefined && pred.actualOpponent !== null && (
-                    <div className="bg-surface-dark rounded-lg p-3">
-                      <p className="text-xs text-gray-400 mb-1">Actual Opponent</p>
-                      <p className={`font-medium ${pred.wasCorrect ? 'text-green-400' : 'text-red-400'}`}>
-                        {pred.opponentName || `Player ${pred.actualOpponent}`}
-                      </p>
+                  <div style={{ border: '2px solid #333', padding: '10px 14px' }}>
+                    <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: '#888', marginBottom: 4 }}>ACTUAL</div>
+                    <div style={{
+                      fontWeight: 800, fontSize: '0.85rem',
+                      color: pred.wasCorrect ? 'var(--color-neon-green)' : pred.wasCorrect === false ? '#ff3333' : '#888',
+                    }}>
+                      {pred.opponentName || '(not recorded)'}
                     </div>
-                  )}
-                  {pred.actualOpponent === undefined || pred.actualOpponent === null ? (
-                    <div className="bg-surface-dark rounded-lg p-3">
-                      <p className="text-xs text-gray-400 mb-1">Actual Opponent</p>
-                      <p className="text-gray-500">Not yet recorded</p>
-                    </div>
-                  ) : null}
+                  </div>
                 </div>
 
                 {pred.note && (
-                  <p className="mt-2 text-xs text-gray-500 italic">{pred.note}</p>
-                )}
-                {pred.totalGames !== undefined && (
-                  <p className="mt-1 text-xs text-gray-600">
-                    Based on {pred.matchCount} match{ pred.matchCount !== 1 ? 'es' : ''} out of {pred.totalGames} games
-                  </p>
+                  <div style={{ marginTop: 8, fontSize: '0.65rem', color: '#666', fontStyle: 'italic' }}>{pred.note}</div>
                 )}
               </div>
             ))}
@@ -291,10 +221,9 @@ export default function Predict() {
       )}
 
       {!predictions && selectedGame && (
-        <div className="bg-surface border border-gray-700 rounded-xl p-10 text-center">
-          <p className="text-4xl mb-3">🔮</p>
-          <p className="text-gray-400">
-            Select round and click &quot;Predict&quot; to see opponent predictions
+        <div className="brutal-card" style={{ textAlign: 'center', padding: 50 }}>
+          <p style={{ fontSize: '0.8rem', color: '#888', textTransform: 'uppercase', letterSpacing: 1 }}>
+            SELECT ROUND &amp; CLICK PREDICT
           </p>
         </div>
       )}

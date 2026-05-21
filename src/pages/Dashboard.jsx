@@ -34,16 +34,16 @@ export default function Dashboard() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const mode = window.confirm('Merge with existing data? (OK = merge, Cancel = replace all)');
+        const mode = window.confirm('MERGE with existing data? [OK] = Merge  [Cancel] = Replace all');
         if (mode) {
           importGames(evt.target.result);
         } else {
           replaceAllGames(evt.target.result);
         }
         setGames(loadGames());
-        setImportMsg({ type: 'success', text: 'Data imported successfully!' });
+        setImportMsg({ type: 'success', text: 'DATA IMPORTED' });
       } catch (err) {
-        setImportMsg({ type: 'error', text: `Import failed: ${err.message}` });
+        setImportMsg({ type: 'error', text: `IMPORT FAILED: ${err.message}` });
       }
       e.target.value = '';
       setTimeout(() => setImportMsg(null), 3000);
@@ -53,151 +53,139 @@ export default function Dashboard() {
 
   const totalRounds = games.reduce((sum, g) => sum + (g.rounds?.length || 0), 0);
   const totalEliminations = games.reduce(
-    (sum, g) =>
-      sum + g.players.filter((p) => p.eliminatedAtRound !== null && p.eliminatedAtRound !== undefined).length,
-    0
+    (sum, g) => sum + g.players.filter((p) => p.eliminatedAtRound).length, 0
   );
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-gray-400 text-sm mt-1">Overview of your recorded Magic Chess games</p>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, margin: 0, color: '#fff' }}>
+            DASHBOARD
+          </h1>
+          <p style={{ color: '#666', marginTop: 4, fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+            RECORDED GAMES OVERVIEW
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleExport}
-            disabled={games.length === 0}
-            className="px-3 py-2 bg-surface border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            ⬇ Export
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={handleExport} disabled={games.length === 0} className="brutal-btn brutal-btn-sm" style={{ boxShadow: '3px 3px 0 #fff' }}>
+            ⬇ EXPORT
           </button>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="px-3 py-2 bg-surface border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg text-sm transition-colors"
-          >
-            ⬆ Import
+          <button onClick={() => fileRef.current?.click()} className="brutal-btn brutal-btn-sm" style={{ boxShadow: '3px 3px 0 #fff' }}>
+            ⬆ IMPORT
           </button>
-          <input ref={fileRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
-          <button
-            onClick={() => navigate('/input')}
-            className="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors text-sm"
-          >
-            + Record New Game
+          <input ref={fileRef} type="file" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+          <button onClick={() => navigate('/input')} className="brutal-btn brutal-btn-neon brutal-btn-sm" style={{ boxShadow: '3px 3px 0 var(--color-neon-green)' }}>
+            + NEW GAME
           </button>
         </div>
       </div>
 
       {importMsg && (
-        <div className={`mb-4 px-4 py-2.5 rounded-lg text-sm ${
-          importMsg.type === 'success' ? 'bg-green-900/30 text-green-400 border border-green-800' : 'bg-red-900/30 text-red-400 border border-red-800'
-        }`}>
+        <div style={{
+          marginBottom: 20, padding: '10px 16px', border: '3px solid',
+          borderColor: importMsg.type === 'success' ? 'var(--color-neon-green)' : '#ff3333',
+          color: importMsg.type === 'success' ? 'var(--color-neon-green)' : '#ff3333',
+          fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase',
+        }}>
           {importMsg.text}
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-surface border border-gray-700 rounded-xl p-5">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Games</p>
-          <p className="text-3xl font-bold text-white mt-1">{games.length}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 24 }}>
+        <div className="brutal-stat">
+          <div className="brutal-stat-label">GAMES</div>
+          <div className="brutal-stat-value">{games.length}</div>
         </div>
-        <div className="bg-surface border border-gray-700 rounded-xl p-5">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Total Rounds</p>
-          <p className="text-3xl font-bold text-white mt-1">{totalRounds}</p>
+        <div className="brutal-stat">
+          <div className="brutal-stat-label">ROUNDS</div>
+          <div className="brutal-stat-value">{totalRounds}</div>
         </div>
-        <div className="bg-surface border border-gray-700 rounded-xl p-5">
-          <p className="text-gray-400 text-xs uppercase tracking-wider">Eliminations</p>
-          <p className="text-3xl font-bold text-white mt-1">{totalEliminations}</p>
+        <div className="brutal-stat">
+          <div className="brutal-stat-label">ELIMINATED</div>
+          <div className="brutal-stat-value" style={{ color: '#ff3333' }}>{totalEliminations}</div>
         </div>
       </div>
 
       {games.length === 0 ? (
-        <div className="bg-surface border border-gray-700 rounded-xl p-12 text-center">
-          <p className="text-5xl mb-4">🎮</p>
-          <h2 className="text-xl font-semibold text-white mb-2">No games recorded yet</h2>
-          <p className="text-gray-400 mb-4">Start recording your first Magic Chess game to begin analysis.</p>
-          <button
-            onClick={() => navigate('/input')}
-            className="px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors"
-          >
-            Record First Game
+        <div className="brutal-card" style={{ textAlign: 'center', padding: 60 }}>
+          <div style={{ fontSize: '3rem', marginBottom: 12 }}>♟</div>
+          <h2 style={{ fontWeight: 800, fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: 1, margin: '0 0 8px' }}>
+            NO GAMES YET
+          </h2>
+          <p style={{ color: '#666', fontSize: '0.75rem', marginBottom: 20 }}>
+            RECORD YOUR FIRST MAGIC CHESS GAME
+          </p>
+          <button onClick={() => navigate('/input')} className="brutal-btn brutal-btn-neon">
+            RECORD GAME
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {games
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-            .map((game) => (
-              <div
-                key={game.id}
-                className="bg-surface border border-gray-700 rounded-xl p-5 hover:border-gray-600 transition-colors"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-semibold text-white">
-                        Game #{games.indexOf(game) + 1}
-                      </h3>
-                      <span className="text-xs text-gray-500">
-                        {new Date(game.createdAt).toLocaleDateString('en-US', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-4 text-sm text-gray-400">
-                      <span>{game.players.length} players</span>
-                      <span>{game.rounds?.length || 0} rounds recorded</span>
-                      <span>
-                        {game.players.filter((p) => p.eliminatedAtRound !== null && p.eliminatedAtRound !== undefined).length} eliminated
-                      </span>
-                      <span>
-                        Active: {game.players.filter((p) => p.eliminatedAtRound === null || p.eliminatedAtRound === undefined).length}
-                      </span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {game.players.map((p) => (
-                        <span
-                          key={p.seat}
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            p.eliminatedAtRound !== null && p.eliminatedAtRound !== undefined
-                              ? 'bg-red-900/30 text-red-400'
-                              : 'bg-green-900/30 text-green-400'
-                          }`}
-                        >
-                          S{p.seat}: {p.name}
-                          {p.eliminatedAtRound !== null && p.eliminatedAtRound !== undefined && (
-                            <span className="ml-1 opacity-75">(R{p.eliminatedAtRound})</span>
-                          )}
+            .map((game, idx) => {
+              const activeCount = game.players.filter((p) => !p.eliminatedAtRound).length;
+              const elimCount = game.players.filter((p) => p.eliminatedAtRound).length;
+              return (
+                <div key={game.id} className="brutal-card" style={{ padding: 18 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+                          GAME #{games.length - idx}
                         </span>
-                      ))}
+                        <span style={{ color: '#555', fontSize: '0.6rem' }}>
+                          {new Date(game.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, fontSize: '0.68rem', color: '#888', marginBottom: 10 }}>
+                        <span>{game.rounds?.length || 0} ROUNDS</span>
+                        <span style={{ color: 'var(--color-neon-green)' }}>{activeCount} ACTIVE</span>
+                        <span style={{ color: '#ff3333' }}>{elimCount} ELIMINATED</span>
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                        {game.players.map((p) => (
+                          <span key={p.seat} style={{
+                            display: 'inline-flex', alignItems: 'center', padding: '2px 7px',
+                            border: `2px solid ${p.eliminatedAtRound ? '#ff3333' : 'var(--color-neon-green)'}`,
+                            color: p.eliminatedAtRound ? '#ff3333' : 'var(--color-neon-green)',
+                            fontSize: '0.62rem', fontWeight: 700,
+                          }}>
+                            S{p.seat} {p.name}
+                            {p.eliminatedAtRound && (
+                              <span style={{ marginLeft: 4, opacity: 0.7 }}>R{p.eliminatedAtRound}</span>
+                            )}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2 ml-4">
-                    <button
-                      onClick={() => navigate(`/predict?id=${game.id}`)}
-                      className="px-3 py-1.5 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm transition-colors"
-                    >
-                      Predict
-                    </button>
-                    <button
-                      onClick={() => handleDelete(game.id)}
-                      className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                        deleteConfirm === game.id
-                          ? 'bg-red-600 text-white'
-                          : 'bg-red-900/20 hover:bg-red-900/40 text-red-400'
-                      }`}
-                    >
-                      {deleteConfirm === game.id ? 'Confirm?' : 'Delete'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => navigate(`/predict?id=${game.id}`)}
+                        className="brutal-btn brutal-btn-sm"
+                        style={{ boxShadow: '3px 3px 0 var(--color-neon-green)', borderColor: 'var(--color-neon-green)', color: 'var(--color-neon-green)' }}
+                      >
+                        PREDICT
+                      </button>
+                      <button
+                        onClick={() => handleDelete(game.id)}
+                        className="brutal-btn brutal-btn-sm"
+                        style={{
+                          boxShadow: '3px 3px 0 #ff3333',
+                          borderColor: '#ff3333',
+                          color: '#ff3333',
+                          background: deleteConfirm === game.id ? '#ff3333' : 'transparent',
+                          ...(deleteConfirm === game.id ? { color: '#0d0d0d' } : {}),
+                        }}
+                      >
+                        {deleteConfirm === game.id ? 'CONFIRM?' : 'DELETE'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
         </div>
       )}
     </div>

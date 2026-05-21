@@ -1,18 +1,21 @@
 export default function SeatGrid({ players, selectedSeat, onSelect, disabled = false }) {
   const positions = [
-    { seat: 1, top: '0%', left: '50%' },
-    { seat: 2, top: '12%', left: '78%' },
-    { seat: 3, top: '38%', left: '90%' },
-    { seat: 4, top: '65%', left: '78%' },
-    { seat: 5, top: '78%', left: '50%' },
-    { seat: 6, top: '65%', left: '22%' },
-    { seat: 7, top: '38%', left: '10%' },
-    { seat: 8, top: '12%', left: '22%' },
+    { top: '5%', left: '50%' },
+    { top: '18%', left: '80%' },
+    { top: '43%', left: '92%' },
+    { top: '68%', left: '80%' },
+    { top: '82%', left: '50%' },
+    { top: '68%', left: '20%' },
+    { top: '43%', left: '8%' },
+    { top: '18%', left: '20%' },
   ];
 
   return (
-    <div className="relative w-full max-w-[320px] aspect-square mx-auto">
-      <div className="absolute inset-0 rounded-full border-2 border-gray-700 bg-surface/50" />
+    <div style={{ position: 'relative', width: '100%', maxWidth: 300, aspectRatio: '1', margin: '0 auto' }}>
+      <div style={{
+        position: 'absolute', inset: 0, borderRadius: '50%',
+        border: '3px solid #444',
+      }} />
       {[1, 2, 3, 4, 5, 6, 7, 8].map((seat) => {
         const player = players.find((p) => p.seat === seat);
         const pos = positions[seat - 1];
@@ -25,20 +28,40 @@ export default function SeatGrid({ players, selectedSeat, onSelect, disabled = f
             type="button"
             disabled={disabled}
             onClick={() => onSelect?.(seat)}
-            className={`absolute w-10 h-10 -translate-x-1/2 -translate-y-1/2 rounded-full flex items-center justify-center text-xs font-bold transition-all
-              ${isSelected ? 'ring-2 ring-primary bg-primary/30 text-white scale-110' : ''}
-              ${isEliminated ? 'bg-red-900/50 text-red-400 line-through opacity-60' : 'bg-surface-light text-gray-300 hover:bg-primary/20 hover:text-white'}
-              ${disabled ? 'cursor-default' : 'cursor-pointer'}
-            `}
-            style={{ top: pos.top, left: pos.left }}
-            title={player ? `Seat ${seat}: ${player.name}` : `Seat ${seat}: Empty`}
+            style={{
+              position: 'absolute',
+              top: pos.top,
+              left: pos.left,
+              transform: 'translate(-50%, -50%)',
+              width: 36,
+              height: 36,
+              border: isSelected ? '3px solid var(--color-neon-green)' : '3px solid #555',
+              background: isSelected ? 'rgba(0,255,65,0.2)' : '#111',
+              color: isEliminated ? '#ff3333' : '#ddd',
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              fontFamily: '"JetBrains Mono", monospace',
+              cursor: disabled ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textDecoration: isEliminated ? 'line-through' : 'none',
+              opacity: isEliminated ? 0.5 : 1,
+              transition: 'background 0.1s',
+            }}
+            title={player?.name || `Seat ${seat}`}
           >
-            {player ? player.name.charAt(0).toUpperCase() : seat}
+            {player?.name?.charAt(0).toUpperCase() || seat}
           </button>
         );
       })}
-      <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm font-medium">
-        Board
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        color: '#555', fontSize: '0.65rem', fontWeight: 700,
+        textTransform: 'uppercase', letterSpacing: 1,
+      }}>
+        BOARD
       </div>
     </div>
   );

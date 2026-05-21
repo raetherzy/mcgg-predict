@@ -1,43 +1,22 @@
 import { useState, useMemo } from 'react';
 import { loadGames } from '../store/gameStore';
-import {
-  buildMatchupMatrix,
-  computeStandardBergerTable,
-  compareWithStandard,
-  detectGhostPattern,
-  buildPatternSequence,
-} from '../algorithm/patternDiscovery';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { buildMatchupMatrix, buildPatternSequence, detectGhostPattern, compareWithStandard } from '../algorithm/patternDiscovery';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function Analysis() {
   const games = useMemo(() => loadGames(), []);
   const [selectedSeat, setSelectedSeat] = useState(1);
   const [view, setView] = useState('matrix');
 
-  const matrix = useMemo(() => {
-    if (games.length === 0) return null;
-    return buildMatchupMatrix(games);
-  }, [games]);
-
-  const sequence = useMemo(() => {
-    if (games.length === 0) return null;
-    return buildPatternSequence(games);
-  }, [games]);
-
-  const standard = useMemo(() => computeStandardBergerTable(), []);
-  const comparison = useMemo(() => {
-    if (games.length === 0) return null;
-    return compareWithStandard(games);
-  }, [games]);
-  const ghostData = useMemo(() => {
-    if (games.length === 0) return [];
-    return detectGhostPattern(games);
-  }, [games]);
+  const matrix = useMemo(() => games.length > 0 ? buildMatchupMatrix(games) : null, [games]);
+  const sequence = useMemo(() => games.length > 0 ? buildPatternSequence(games) : null, [games]);
+  const ghostData = useMemo(() => games.length > 0 ? detectGhostPattern(games) : [], [games]);
+  const comparison = useMemo(() => games.length > 0 ? compareWithStandard(games) : null, [games]);
 
   const chartData = useMemo(() => {
     if (!sequence || !sequence[selectedSeat]) return [];
     return sequence[selectedSeat].map((s) => ({
-      round: s.round,
+      round: `R${s.round}`,
       opponent: s.mostLikely,
       confidence: Math.round(s.confidence / s.totalGames * 100) || 0,
     }));
@@ -47,7 +26,7 @@ export default function Analysis() {
     if (!comparison) return [];
     const grouped = {};
     for (const c of comparison) {
-      const key = `Round ${c.round}`;
+      const key = `R${c.round}`;
       if (!grouped[key]) grouped[key] = { round: key, accuracy: 0, count: 0 };
       grouped[key].accuracy += c.accuracy;
       grouped[key].count++;
@@ -58,36 +37,49 @@ export default function Analysis() {
     }));
   }, [comparison]);
 
+  const views = ['matrix', 'chart', 'ghosts', 'accuracy'];
+
   if (games.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto text-center py-16">
-        <p className="text-5xl mb-4">📈</p>
-        <h1 className="text-2xl font-bold text-white mb-2">No Analysis Data</h1>
-        <p className="text-gray-400 mb-4">Record games first to see pattern analysis.</p>
-        <a
-          href="/input"
-          className="inline-block px-5 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors"
-        >
-          Record Game Now
+      <div style={{ maxWidth: 500, margin: '0 auto', textAlign: 'center', paddingTop: 60 }}>
+        <div style={{ fontSize: '3rem', marginBottom: 12 }}>📈</div>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+          NO DATA
+        </h1>
+        <p style={{ color: '#666', fontSize: '0.75rem', marginBottom: 20 }}>
+          RECORD GAMES FIRST
+        </p>
+        <a href="/input" className="brutal-btn brutal-btn-neon" style={{ textDecoration: 'none', display: 'inline-block' }}>
+          RECORD GAME
         </a>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <h1 className="text-2xl font-bold text-white mb-6">Pattern Analysis</h1>
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      <h1 style={{ fontSize: '1.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, margin: '0 0 24px', color: '#fff' }}>
+        PATTERN ANALYSIS
+      </h1>
 
-      <div className="flex gap-2 mb-6">
-        {['matrix', 'chart', 'ghosts', 'accuracy'].map((v) => (
+      <div style={{ display: 'flex', gap: 0, marginBottom: 24, flexWrap: 'wrap' }}>
+        {views.map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize ${
-              view === v
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'bg-surface border border-gray-700 text-gray-400 hover:text-gray-200'
-            }`}
+            style={{
+              padding: '8px 16px',
+              fontFamily: '"JetBrains Mono", monospace',
+              fontWeight: 700,
+              fontSize: '0.7rem',
+              textTransform: 'uppercase',
+              letterSpacing: 1,
+              border: '2px solid',
+              borderColor: view === v ? 'var(--color-neon-green)' : '#444',
+              background: view === v ? 'rgba(0,255,65,0.08)' : 'transparent',
+              color: view === v ? 'var(--color-neon-green)' : '#888',
+              cursor: 'pointer',
+            }}
           >
             {v}
           </button>
@@ -96,69 +88,63 @@ export default function Analysis() {
 
       {view === 'matrix' && matrix && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">Matchup Matrix (Opponent Frequency)</h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Shows how many times each seat faced each opponent per round across all recorded games.
+          <h3 style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            MATCHUP MATRIX — SEAT {selectedSeat}
+          </h3>
+          <p style={{ color: '#666', fontSize: '0.65rem', marginBottom: 16 }}>
+            OPPONENT FREQUENCY PER ROUND
           </p>
 
-          <div className="flex gap-2 mb-4">
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
             {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedSeat(s)}
-                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
-                  selectedSeat === s
-                    ? 'bg-primary text-white'
-                    : 'bg-surface border border-gray-700 text-gray-400 hover:text-white'
-                }`}
+                style={{
+                  width: 36, height: 36, border: '3px solid',
+                  borderColor: selectedSeat === s ? 'var(--color-neon-green)' : '#444',
+                  background: selectedSeat === s ? 'rgba(0,255,65,0.1)' : 'transparent',
+                  color: selectedSeat === s ? 'var(--color-neon-green)' : '#aaa',
+                  fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer',
+                  fontFamily: '"JetBrains Mono", monospace',
+                }}
               >
-                S{s}
+                {s}
               </button>
             ))}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+          <div style={{ overflowX: 'auto' }}>
+            <table className="brutal-table">
               <thead>
                 <tr>
-                  <th className="text-left p-3 bg-surface-dark text-gray-400 font-medium border-b border-gray-700 sticky left-0">
-                    Round
-                  </th>
+                  <th>ROUND</th>
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
-                    <th key={s} className="p-3 bg-surface-dark text-gray-400 font-medium border-b border-gray-700 text-center">
-                      S{s}
-                    </th>
+                    <th key={s} style={{ textAlign: 'center' }}>S{s}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((round) => {
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((round) => {
                   const hasData = Object.values(matrix[selectedSeat]?.[round] || {}).some((v) => v > 0);
                   if (!hasData) return null;
+                  const maxCount = Math.max(...Object.values(matrix[selectedSeat]?.[round] || {}), 1);
                   return (
-                    <tr key={round} className="border-b border-gray-800 hover:bg-surface/50">
-                      <td className="p-3 text-gray-300 font-medium sticky left-0 bg-surface-dark border-r border-gray-800">
-                        R{round}
-                      </td>
+                    <tr key={round}>
+                      <td style={{ fontWeight: 700 }}>R{round}</td>
                       {[1, 2, 3, 4, 5, 6, 7, 8].map((opp) => {
                         const count = matrix[selectedSeat]?.[round]?.[opp] || 0;
-                        const maxCount = Math.max(
-                          ...Object.values(matrix[selectedSeat]?.[round] || {}),
-                          1
-                        );
-                        const intensity = count > 0 ? count / maxCount : 0;
                         return (
                           <td
                             key={opp}
-                            className="p-3 text-center"
                             style={{
-                              backgroundColor: count > 0
-                                ? `rgba(168, 85, 247, ${0.1 + intensity * 0.5})`
-                                : 'transparent',
-                              color: count > 0 ? '#d8b4fe' : '#4b5563',
+                              textAlign: 'center',
+                              background: count > 0 ? `rgba(0,255,65,${0.07 + (count / maxCount) * 0.25})` : 'transparent',
+                              color: count > 0 ? 'var(--color-neon-green)' : '#444',
+                              fontWeight: count > 0 ? 700 : 400,
                             }}
                           >
-                            {count > 0 ? count : '-'}
+                            {count > 0 ? count : '·'}
                           </td>
                         );
                       })}
@@ -173,48 +159,43 @@ export default function Analysis() {
 
       {view === 'chart' && chartData.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-2">
-            Opponent Pattern — Seat {selectedSeat}
+          <h3 style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            OPPONENT PATTERN — SEAT {selectedSeat}
           </h3>
-          <p className="text-sm text-gray-400 mb-4">
-            Most frequent opponent for Seat {selectedSeat} per round across all games.
+          <p style={{ color: '#666', fontSize: '0.65rem', marginBottom: 16 }}>
+            MOST FREQUENT OPPONENT PER ROUND
           </p>
 
-          <div className="flex gap-2 mb-4">
+          <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
             {[1, 2, 3, 4, 5, 6, 7, 8].map((s) => (
               <button
                 key={s}
                 onClick={() => setSelectedSeat(s)}
-                className={`w-10 h-10 rounded-lg text-sm font-bold transition-colors ${
-                  selectedSeat === s
-                    ? 'bg-primary text-white'
-                    : 'bg-surface border border-gray-700 text-gray-400 hover:text-white'
-                }`}
+                style={{
+                  width: 36, height: 36, border: '3px solid',
+                  borderColor: selectedSeat === s ? 'var(--color-neon-green)' : '#444',
+                  background: selectedSeat === s ? 'rgba(0,255,65,0.1)' : 'transparent',
+                  color: selectedSeat === s ? 'var(--color-neon-green)' : '#aaa',
+                  fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer',
+                  fontFamily: '"JetBrains Mono", monospace',
+                }}
               >
-                S{s}
+                {s}
               </button>
             ))}
           </div>
 
-          <div className="bg-surface border border-gray-700 rounded-xl p-4">
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="brutal-card" style={{ padding: 20 }}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="round" stroke="#9ca3af" fontSize={12} />
-                <YAxis stroke="#9ca3af" fontSize={12} domain={[0, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                <XAxis dataKey="round" stroke="#666" fontSize={11} fontFamily="JetBrains Mono, monospace" />
+                <YAxis stroke="#666" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[0, 8]} ticks={[1, 2, 3, 4, 5, 6, 7, 8]} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #4b5563', borderRadius: '8px' }}
-                  labelStyle={{ color: '#f3f4f6' }}
+                  contentStyle={{ background: '#111', border: '2px solid #444', borderRadius: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}
+                  labelStyle={{ color: '#aaa', fontWeight: 700 }}
                 />
-                <Legend />
-                <Line
-                  type="stepAfter"
-                  dataKey="opponent"
-                  name="Opponent Seat"
-                  stroke="#a855f7"
-                  strokeWidth={2}
-                  dot={{ fill: '#a855f7', r: 5 }}
-                />
+                <Line type="stepAfter" dataKey="opponent" name="OPPONENT" stroke="#00ff41" strokeWidth={2} dot={{ fill: '#00ff41', r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -223,29 +204,29 @@ export default function Analysis() {
 
       {view === 'ghosts' && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">Ghost/Mirror Occurrences</h3>
+          <h3 style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 }}>
+            GHOST MIRROR HISTORY
+          </h3>
           {ghostData.length === 0 ? (
-            <div className="bg-surface border border-gray-700 rounded-xl p-8 text-center">
-              <p className="text-gray-400">No ghost/mirror data found. Ghosts appear when active player count is odd.</p>
+            <div className="brutal-card" style={{ textAlign: 'center', padding: 40 }}>
+              <p style={{ color: '#888', fontSize: '0.75rem' }}>NO GHOST DATA DETECTED</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div style={{ overflowX: 'auto' }}>
+              <table className="brutal-table">
                 <thead>
                   <tr>
-                    <th className="text-left p-3 bg-surface-dark text-gray-400 border-b border-gray-700">Game</th>
-                    <th className="text-left p-3 bg-surface-dark text-gray-400 border-b border-gray-700">Round</th>
-                    <th className="text-left p-3 bg-surface-dark text-gray-400 border-b border-gray-700">Ghost Seat</th>
-                    <th className="text-left p-3 bg-surface-dark text-gray-400 border-b border-gray-700">Real Opponent</th>
+                    <th>ROUND</th>
+                    <th>GHOST SEAT</th>
+                    <th>VS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ghostData.map((g, i) => (
-                    <tr key={i} className="border-b border-gray-800">
-                      <td className="p-3 text-gray-300">#{games.findIndex((gm) => gm.id === g.gameId) + 1}</td>
-                      <td className="p-3 text-gray-300">Round {g.round}</td>
-                      <td className="p-3 text-ghost font-medium">Seat {g.ghostSeat}</td>
-                      <td className="p-3 text-gray-300">Seat {g.realOpponent}</td>
+                    <tr key={i}>
+                      <td style={{ fontWeight: 700 }}>R{g.round}</td>
+                      <td style={{ color: 'var(--color-neon-purple)', fontWeight: 700 }}>SEAT {g.ghostSeat}</td>
+                      <td>SEAT {g.realOpponent}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -257,32 +238,25 @@ export default function Analysis() {
 
       {view === 'accuracy' && accuracyData.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold text-white mb-4">
-            Prediction Accuracy vs Standard Round-Robin
+          <h3 style={{ fontWeight: 800, fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            VS STANDARD ROUND-ROBIN
           </h3>
-          <p className="text-sm text-gray-400 mb-4">
-            How closely your recorded data matches the standard Berger round-robin table.
+          <p style={{ color: '#666', fontSize: '0.65rem', marginBottom: 16 }}>
+            DATA MATCH WITH BERGER TABLE (%)
           </p>
 
-          <div className="bg-surface border border-gray-700 rounded-xl p-4">
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="brutal-card" style={{ padding: 20 }}>
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={accuracyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                <XAxis dataKey="round" stroke="#9ca3af" fontSize={12} />
-                <YAxis stroke="#9ca3af" fontSize={12} domain={[0, 100]} unit="%" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                <XAxis dataKey="round" stroke="#666" fontSize={11} fontFamily="JetBrains Mono, monospace" />
+                <YAxis stroke="#666" fontSize={11} fontFamily="JetBrains Mono, monospace" domain={[0, 100]} unit="%" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #4b5563', borderRadius: '8px' }}
-                  labelStyle={{ color: '#f3f4f6' }}
-                  formatter={(value) => [`${value}%`, 'Accuracy']}
+                  contentStyle={{ background: '#111', border: '2px solid #444', borderRadius: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}
+                  labelStyle={{ color: '#aaa', fontWeight: 700 }}
+                  formatter={(value) => [`${value}%`, 'ACCURACY']}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="accuracy"
-                  stroke="#06b6d4"
-                  strokeWidth={2}
-                  dot={{ fill: '#06b6d4', r: 5 }}
-                  name="Accuracy %"
-                />
+                <Line type="monotone" dataKey="accuracy" stroke="#00ffff" strokeWidth={2} dot={{ fill: '#00ffff', r: 4 }} name="ACCURACY" />
               </LineChart>
             </ResponsiveContainer>
           </div>

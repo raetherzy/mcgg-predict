@@ -3,13 +3,21 @@ import Navbar from './Navbar';
 
 export default function Layout() {
   return (
-    <div className="flex flex-col min-h-screen">
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Navbar />
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+      <main style={{ flex: 1, maxWidth: 1024, margin: '0 auto', width: '100%', padding: '32px 16px' }}>
         <Outlet />
       </main>
-      <footer className="bg-surface-dark border-t border-gray-800 py-3 text-center text-gray-500 text-xs">
-        MCGG Predict v1.0 &mdash; Magic Chess Opponent Predictor
+      <footer style={{
+        borderTop: '2px solid #333',
+        padding: '14px 0',
+        textAlign: 'center',
+        color: '#555',
+        fontSize: '0.65rem',
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+      }}>
+        MCGG PREDICT v1.0 &mdash; MAGIC CHESS OPPONENT PREDICTOR
       </footer>
     </div>
   );

@@ -1,61 +1,102 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addGame } from '../store/gameStore';
 import { getActivePlayers } from '../algorithm/utils';
-import SeatGrid from '../components/SeatGrid';
 
-const DEFAULT_PLAYER_NAME = ['', '', '', '', '', '', '', ''];
 const SEATS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export default function InputGame() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [players, setPlayers] = useState(
-    SEATS.map((s) => ({
-      seat: s,
-      name: DEFAULT_PLAYER_NAME[s - 1],
-      eliminatedAtRound: null,
-    }))
+    SEATS.map((s) => ({ seat: s, name: '', eliminatedAtRound: null }))
   );
   const [rounds, setRounds] = useState([]);
   const [currentRound, setCurrentRound] = useState(1);
+  const [eliminatedThisRound, setEliminatedThisRound] = useState([]);
+  const [ghostCopySeat, setGhostCopySeat] = useState(null);
+  const [selections, setSelections] = useState({});
 
-  const activePlayers = getActivePlayers(players, currentRound - 1);
-
-  const [matchups, setMatchups] = useState(
-    activePlayers.map((p) => ({
-      seat: p.seat,
-      opponentSeat: null,
-      isGhost: false,
-    }))
+  const activePlayers = useMemo(
+    () => getActivePlayers(players, currentRound - 1),
+    [players, currentRound]
   );
 
-  const [eliminatedThisRound, setEliminatedThisRound] = useState([]);
+  const activeNonElim = useMemo(
+    () => activePlayers.filter((ap) => !eliminatedThisRound.includes(ap.seat)),
+    [activePlayers, eliminatedThisRound]
+  );
+
+  const isOdd = activeNonElim.length % 2 !== 0;
+
+  useEffect(() => {
+    setSelections({});
+    setGhostCopySeat(null);
+    setEliminatedThisRound([]);
+  }, [currentRound]);
+
+  const matchups = useMemo(() => {
+    return activePlayers.map((p) => ({
+      seat: p.seat,
+      opponentSeat: selections[p.seat] ?? null,
+    }));
+  }, [activePlayers, selections]);
+
+  const takenSeats = useMemo(() => {
+    const s = new Set();
+    for (const m of matchups) {
+      if (m.opponentSeat !== null && m.opponentSeat !== 'ghost') {
+        s.add(m.seat);
+        s.add(m.opponentSeat);
+      }
+    }
+    return s;
+  }, [matchups]);
+
+  const ghostIsTaken = useMemo(() => {
+    return matchups.some((m) => m.opponentSeat === 'ghost');
+  }, [matchups]);
+
+  const allMatchupsSet = useMemo(() => {
+    if (activePlayers.length <= 1) return true;
+    const everyonePaired = matchups
+      .filter((m) => !eliminatedThisRound.includes(m.seat))
+      .every((m) => m.opponentSeat !== null);
+    const ghostOk = !isOdd || (ghostCopySeat !== null && ghostIsTaken);
+    return everyonePaired && ghostOk;
+  }, [matchups, eliminatedThisRound, isOdd, ghostCopySeat, ghostIsTaken, activePlayers]);
 
   const handlePlayerNameChange = (seat, name) => {
     setPlayers((prev) => prev.map((p) => (p.seat === seat ? { ...p, name } : p)));
   };
 
   const handleOpponentSelect = (seat, opponentSeat) => {
-    setMatchups((prev) => {
-      const prevMe = prev.find((m) => m.seat === seat);
-      const myOldOpponent = prevMe?.opponentSeat;
+    setSelections((prev) => {
+      const myOldOpponent = prev[seat];
 
-      const updated = prev.map((m) => {
-        if (m.seat === seat) return { ...m, opponentSeat };
-        if (m.seat === opponentSeat) return { ...m, opponentSeat: seat };
-        if (m.seat === myOldOpponent) return { ...m, opponentSeat: null };
-        return m;
+      const next = { ...prev, [seat]: opponentSeat };
+
+      if (opponentSeat !== 'ghost' && typeof opponentSeat === 'number') {
+        next[opponentSeat] = seat;
+      }
+
+      if (myOldOpponent && myOldOpponent !== opponentSeat) {
+        if (typeof myOldOpponent === 'number') {
+          if (next[myOldOpponent] === seat) {
+            delete next[myOldOpponent];
+          }
+        }
+      }
+
+      Object.keys(next).forEach((k) => {
+        const s = parseInt(k);
+        if (!isNaN(s) && !activePlayers.find((ap) => ap.seat === s)) {
+          delete next[k];
+        }
       });
 
-      return updated;
+      return next;
     });
-  };
-
-  const handleGhostToggle = (seat) => {
-    setMatchups((prev) =>
-      prev.map((m) => (m.seat === seat ? { ...m, isGhost: !m.isGhost } : m))
-    );
   };
 
   const handleEliminationToggle = (seat) => {
@@ -64,62 +105,42 @@ export default function InputGame() {
     );
   };
 
-  const allMatchupsSet = matchups.every((m) => {
-    if (eliminatedThisRound.includes(m.seat)) return true;
-    return m.opponentSeat !== null;
-  });
-
-  const ghostCount = matchups.filter((m) => m.isGhost).length;
-  const isOddActive = activePlayers.length % 2 !== 0;
-  const ghostValidationOk = !isOddActive || ghostCount === 1;
-
   const handleAddRound = () => {
+    const allSeats = [1, 2, 3, 4, 5, 6, 7, 8];
+    const eliminatedSeats = allSeats.filter(
+      (s) => !activePlayers.find((p) => p.seat === s) && !eliminatedThisRound.includes(s)
+    );
+
     const matchupPairs = [];
     const processed = new Set();
-    const eliminatedSeats = [1, 2, 3, 4, 5, 6, 7, 8].filter(
-      (s) => !activePlayers.find((p) => p.seat === s)
-    );
     let ghostSlotIdx = 0;
 
     for (const m of matchups) {
       if (eliminatedThisRound.includes(m.seat)) continue;
       if (processed.has(m.seat)) continue;
+      if (m.opponentSeat === null) continue;
 
-      const seatA = m.seat;
       let seatB = m.opponentSeat;
-      const ghostA = m.isGhost;
-      let ghostB = false;
+      let isGhostB = false;
       let ghostCopyOf = null;
 
-      if (m.isGhost) {
-        ghostB = true;
-        ghostCopyOf = seatB;
-        if (ghostSlotIdx < eliminatedSeats.length) {
-          seatB = eliminatedSeats[ghostSlotIdx];
-          ghostSlotIdx++;
-        }
-      } else {
-        const opponentRow = matchups.find((x) => x.seat === seatB);
-        ghostB = opponentRow?.isGhost || false;
-        if (ghostB) {
-          ghostCopyOf = seatA;
-          if (ghostSlotIdx < eliminatedSeats.length) {
-            const realOpp = seatB;
-            seatB = eliminatedSeats[ghostSlotIdx];
-            ghostSlotIdx++;
-            ghostCopyOf = realOpp;
-          }
-        }
+      if (seatB === 'ghost') {
+        isGhostB = true;
+        ghostCopyOf = ghostCopySeat;
+        seatB = eliminatedSeats.length > ghostSlotIdx ? eliminatedSeats[ghostSlotIdx] : 999;
+        ghostSlotIdx++;
       }
 
-      processed.add(seatA);
-      processed.add(m.opponentSeat);
+      processed.add(m.seat);
+      if (typeof seatB === 'number') {
+        processed.add(seatB);
+      }
 
       matchupPairs.push({
-        seatA,
+        seatA: m.seat,
         seatB,
-        isGhostA: ghostA,
-        isGhostB: ghostB,
+        isGhostA: false,
+        isGhostB,
         ghostCopyOf,
       });
     }
@@ -141,75 +162,69 @@ export default function InputGame() {
 
     setPlayers(updatedPlayers);
     setCurrentRound((prev) => prev + 1);
-    setEliminatedThisRound([]);
 
-    const stillActive = updatedPlayers.filter(
-      (p) => p.eliminatedAtRound === null || p.eliminatedAtRound > currentRound
-    );
-
+    const stillActive = updatedPlayers.filter((p) => p.eliminatedAtRound === null);
     if (stillActive.length <= 1) {
-      handleFinish(updatedPlayers);
+      const finalRounds = [...rounds, {
+        roundNumber: currentRound,
+        matchups: matchupPairs,
+        eliminations: [...eliminatedThisRound],
+      }];
+      addGame({ players: updatedPlayers, rounds: finalRounds });
+      navigate('/');
       return;
     }
 
-    setMatchups(
-      stillActive.map((p) => ({
-        seat: p.seat,
-        opponentSeat: null,
-        isGhost: false,
-      }))
-    );
-  };
-
-  const handleFinish = (finalPlayers) => {
-    const pl = finalPlayers || players;
-    addGame({
-      players: pl,
-      rounds,
-    });
-    navigate('/');
+    setSelections({});
+    setGhostCopySeat(null);
+    setEliminatedThisRound([]);
   };
 
   const handleSkipRound = () => {
     setCurrentRound((prev) => prev + 1);
-    setEliminatedThisRound([]);
+  };
+
+  const handleFinish = () => {
+    addGame({ players, rounds });
+    navigate('/');
   };
 
   if (step === 1) {
     return (
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+      <div style={{ maxWidth: 700, margin: '0 auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
           <div>
-            <h1 className="text-2xl font-bold text-white">Record New Game</h1>
-            <p className="text-gray-400 text-sm mt-1">Step 1: Enter 8 player names</p>
+            <h1 style={{ fontSize: '1.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, margin: 0, color: '#fff' }}>
+              RECORD GAME
+            </h1>
+            <p style={{ color: '#666', marginTop: 4, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Step 1 &mdash; Enter player names
+            </p>
           </div>
-          <span className="text-xs text-gray-500 bg-surface px-3 py-1 rounded-full">Step 1/2</span>
+          <span className="brutal-badge" style={{ color: '#666', borderColor: '#666' }}>1/2</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
           {players.map((player) => (
-            <div key={player.seat} className="bg-surface border border-gray-700 rounded-xl p-4">
-              <label className="block text-xs text-gray-400 mb-1.5">
-                Seat {player.seat}
-              </label>
+            <div key={player.seat} className="brutal-card" style={{ padding: 14 }}>
+              <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 6 }}>
+                SEAT {player.seat}
+              </div>
               <input
                 type="text"
                 maxLength={20}
                 value={player.name}
                 onChange={(e) => handlePlayerNameChange(player.seat, e.target.value)}
-                placeholder={`Player ${player.seat}`}
-                className="w-full bg-surface-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary transition-colors"
+                placeholder={`Player ${player.seat}...`}
+                className="brutal-input"
               />
             </div>
           ))}
         </div>
 
-        <div className="flex justify-end">
-          <button
-            onClick={() => setStep(2)}
-            className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg font-medium transition-colors"
-          >
-            Next: Record Rounds
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => setStep(2)} className="brutal-btn brutal-btn-neon">
+            NEXT: RECORD ROUNDS &gt;&gt;
           </button>
         </div>
       </div>
@@ -217,200 +232,215 @@ export default function InputGame() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
-          <h1 className="text-2xl font-bold text-white">Record Rounds</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Round {currentRound} &mdash; {activePlayers.length} players active
-            {isOddActive && (
-              <span className="text-ghost ml-2">
-                &bull; 1 ghost required ({ghostCount} checked)
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 2, margin: 0, color: '#fff' }}>
+            ROUND {currentRound}
+          </h1>
+          <div style={{ display: 'flex', gap: 16, marginTop: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: '0.75rem', color: '#ccc', textTransform: 'uppercase', letterSpacing: 1 }}>
+              {activeNonElim.length} ACTIVE
+            </span>
+            {isOdd && (
+              <span className="brutal-badge" style={{ color: 'var(--color-neon-purple)', borderColor: 'var(--color-neon-purple)' }}>
+                GHOST REQUIRED
               </span>
             )}
-            {!isOddActive && ghostCount > 0 && (
-              <span className="text-yellow-400 ml-2">&bull; Ghost checked but not needed</span>
+            {!isOdd && (
+              <span className="brutal-badge" style={{ color: '#666', borderColor: '#666' }}>
+                NO GHOST
+              </span>
             )}
-          </p>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setStep(1)}
-            className="px-3 py-1.5 bg-surface border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg text-sm transition-colors"
-          >
-            Edit Players
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setStep(1)} className="brutal-btn brutal-btn-sm" style={{ boxShadow: '3px 3px 0px #fff' }}>
+            EDIT NAMES
           </button>
-          <button
-            onClick={handleSkipRound}
-            className="px-3 py-1.5 bg-surface border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg text-sm transition-colors"
-          >
-            Skip Round
+          <button onClick={handleSkipRound} className="brutal-btn brutal-btn-sm" style={{ boxShadow: '3px 3px 0px #fff' }}>
+            SKIP ROUND
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">Matchups (Round {currentRound})</h3>
-          <div className="space-y-2">
-            {matchups.map((mu) => {
-              const player = players.find((p) => p.seat === mu.seat);
-              const isElim = eliminatedThisRound.includes(mu.seat);
-              const availableOpponents = activePlayers.filter(
-                (ap) =>
-                  ap.seat !== mu.seat &&
-                  !eliminatedThisRound.includes(ap.seat)
-              );
+      {isOdd && (
+        <div className="brutal-card brutal-card-ghost" style={{ marginBottom: 16, padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.5rem' }}>👻</span>
+              <div>
+                <div style={{ fontWeight: 800, color: 'var(--color-neon-purple)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: 1 }}>
+                  GHOST MIRROR
+                </div>
+                <div style={{ fontSize: '0.65rem', color: '#888' }}>
+                  {ghostIsTaken ? 'PAIRED' : 'waiting for opponent...'}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase' }}>Copies:</span>
+              <select
+                value={ghostCopySeat || ''}
+                onChange={(e) => setGhostCopySeat(e.target.value ? parseInt(e.target.value) : null)}
+                className="brutal-select"
+                style={{ width: 220, fontSize: '0.78rem' }}
+              >
+                <option value="">Select player...</option>
+                {activePlayers.map((ap) => (
+                  <option key={ap.seat} value={ap.seat}>
+                    S{ap.seat}: {ap.name || `Player ${ap.seat}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
-              const takenSeats = new Set();
-              for (const m of matchups) {
-                if (m.seat === mu.seat) continue;
-                if (m.opponentSeat !== null) {
-                  takenSeats.add(m.seat);
-                  takenSeats.add(m.opponentSeat);
-                }
-              }
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+        {matchups.map((mu) => {
+          const player = players.find((p) => p.seat === mu.seat);
+          const isElim = eliminatedThisRound.includes(mu.seat);
+          const isTaken = takenSeats.has(mu.seat);
+          const isGhostOpponent = mu.opponentSeat === 'ghost';
 
-              const filteredOpponents = availableOpponents.filter(
-                (ap) => !takenSeats.has(ap.seat) || ap.seat === mu.opponentSeat
-              );
+          const availableOpponents = activePlayers.filter(
+            (ap) => ap.seat !== mu.seat && !eliminatedThisRound.includes(ap.seat)
+          );
 
-              return (
-                <div
-                  key={mu.seat}
-                  className={`bg-surface border rounded-xl p-4 transition-colors ${
-                    isElim ? 'border-red-800 opacity-50' : 'border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-surface-light text-xs font-bold text-white">
-                        {mu.seat}
+          const filteredOpponents = availableOpponents.filter(
+            (ap) => !takenSeats.has(ap.seat) || ap.seat === mu.opponentSeat
+          );
+
+          if (isOdd && !ghostIsTaken) {
+            filteredOpponents.push({ seat: 'ghost', name: 'GHOST MIRROR' });
+          }
+
+          return (
+            <div
+              key={mu.seat}
+              className={`brutal-card ${isElim ? 'brutal-card-danger' : ''}`}
+              style={{ padding: 14, opacity: isElim ? 0.4 : 1 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 28, height: 28, border: '2px solid #fff', fontSize: '0.7rem', fontWeight: 800,
+                    color: isElim ? '#ff3333' : isTaken ? 'var(--color-neon-green)' : '#fff',
+                    background: isElim ? 'rgba(255,51,51,0.1)' : isTaken ? 'rgba(0,255,65,0.1)' : 'transparent',
+                  }}>
+                    {mu.seat}
+                  </span>
+                  <div>
+                    <span style={{
+                      fontWeight: 700, fontSize: '0.85rem',
+                      color: isElim ? '#ff3333' : '#fff',
+                      textDecoration: isElim ? 'line-through' : 'none',
+                    }}>
+                      {player?.name || `Player ${mu.seat}`}
+                    </span>
+                    {isTaken && !isGhostOpponent && !isElim && (
+                      <span className="brutal-badge" style={{ color: 'var(--color-neon-green)', borderColor: 'var(--color-neon-green)', marginLeft: 8 }}>
+                        PAIRED
                       </span>
-                      <span className="text-white text-sm font-medium">
-                        {player?.name || `Player ${mu.seat}`}
+                    )}
+                    {isGhostOpponent && (
+                      <span className="brutal-badge" style={{ color: 'var(--color-neon-purple)', borderColor: 'var(--color-neon-purple)', marginLeft: 8 }}>
+                        VS GHOST
                       </span>
-                    </div>
-                    {isElim ? (
-                      <span className="text-red-400 text-xs font-medium">Eliminated</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <label className="flex items-center gap-1.5 cursor-pointer" title="Check if opponent is a ghost/mirror copy">
-                          <input
-                            type="checkbox"
-                            checked={mu.isGhost}
-                            onChange={() => handleGhostToggle(mu.seat)}
-                            className="w-3.5 h-3.5 accent-ghost rounded"
-                          />
-                          <span className="text-xs text-gray-400">Mirror</span>
-                        </label>
-                        <label className="flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={isElim}
-                            onChange={() => handleEliminationToggle(mu.seat)}
-                            className="w-3.5 h-3.5 accent-danger rounded"
-                          />
-                          <span className="text-xs text-red-400">Elim</span>
-                        </label>
-                      </div>
                     )}
                   </div>
-
-                  {!isElim && (
-                    <select
-                      value={mu.opponentSeat || ''}
-                      onChange={(e) => handleOpponentSelect(mu.seat, parseInt(e.target.value) || null)}
-                      className="w-full bg-surface-dark border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-primary transition-colors"
-                    >
-                      <option value="">Select opponent...</option>
-                      {filteredOpponents.map((ap) => (
-                        <option key={ap.seat} value={ap.seat}>
-                          S{ap.seat}: {players.find((p) => p.seat === ap.seat)?.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                  <span style={{ fontSize: '0.65rem', color: '#ff3333', textTransform: 'uppercase', letterSpacing: 1 }}>ELIM</span>
+                  <input
+                    type="checkbox"
+                    checked={isElim}
+                    onChange={() => handleEliminationToggle(mu.seat)}
+                    className="brutal-checkbox brutal-checkbox-danger"
+                  />
+                </label>
+              </div>
 
-        <div>
-          <h3 className="text-sm font-semibold text-gray-300 mb-3">Board Visualization</h3>
-          <SeatGrid
-            players={players}
-            onSelect={() => {}}
-            disabled
-          />
-          <div className="mt-4 flex flex-wrap gap-2 text-xs">
-            <span className="flex items-center gap-1 text-green-400">
-              <span className="w-2 h-2 rounded-full bg-green-500" /> Active
-            </span>
-            <span className="flex items-center gap-1 text-red-400">
-              <span className="w-2 h-2 rounded-full bg-red-500" /> Eliminated
-            </span>
-            <span className="flex items-center gap-1 text-ghost">
-              <span className="w-2 h-2 rounded-full bg-indigo-500" /> Ghost
-            </span>
-          </div>
-        </div>
+              {!isElim && (
+                <select
+                  value={mu.opponentSeat || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    handleOpponentSelect(mu.seat, val === 'ghost' ? 'ghost' : val ? parseInt(val) : null);
+                  }}
+                  className="brutal-select"
+                >
+                  <option value="">-- SELECT OPPONENT --</option>
+                  {filteredOpponents.map((ap) => {
+                    const isGhostOpt = ap.seat === 'ghost';
+                    const optPlayer = players.find((p) => p.seat === ap.seat);
+                    return (
+                      <option key={isGhostOpt ? 'ghost' : ap.seat} value={isGhostOpt ? 'ghost' : ap.seat}>
+                        {isGhostOpt ? '👻 GHOST MIRROR' : `S${ap.seat}: ${optPlayer?.name || `Player ${ap.seat}`}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+
+              {isElim && (
+                <div className="brutal-input" style={{ color: '#ff3333', textAlign: 'center', opacity: 0.5 }}>
+                  ELIMINATED
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="bg-surface border border-gray-700 rounded-xl p-4 mb-6">
-        <h3 className="text-sm font-semibold text-gray-300 mb-3">
-          Recorded Rounds ({rounds.length})
-        </h3>
-        {rounds.length === 0 ? (
-          <p className="text-gray-500 text-sm">No rounds recorded yet.</p>
-        ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+      {rounds.length > 0 && (
+        <div className="brutal-card" style={{ marginBottom: 20, padding: 16 }}>
+          <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: 1, color: '#888', marginBottom: 10 }}>
+            RECORDED ROUNDS ({rounds.length})
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto', fontSize: '0.72rem' }}>
             {rounds.map((r) => (
-              <div key={r.roundNumber} className="flex items-center gap-3 text-sm">
-                <span className="text-primary font-medium min-w-[60px]">Round {r.roundNumber}</span>
-                <span className="text-gray-400">
+              <div key={r.roundNumber} style={{ display: 'flex', gap: 12, padding: '4px 0', borderBottom: '1px solid #222' }}>
+                <span style={{ color: 'var(--color-neon-green)', fontWeight: 700, minWidth: 60 }}>R{r.roundNumber}</span>
+                <span style={{ color: '#aaa', flex: 1 }}>
                   {r.matchups.map((m) => {
                     const aName = players.find((p) => p.seat === m.seatA)?.name || `S${m.seatA}`;
-                    const bName = players.find((p) => p.seat === m.seatB)?.name || `S${m.seatB}`;
-                    const ghostNote = m.isGhostA
-                      ? ` (mirror from S${m.seatB})`
-                      : m.isGhostB
-                      ? ` (mirror from S${m.seatA})`
-                      : '';
+                    const isGhost = m.isGhostA || m.isGhostB;
+                    let bName;
+                    let ghostNote = '';
+                    if (isGhost && m.ghostCopyOf) {
+                      const copiedName = players.find((p) => p.seat === m.ghostCopyOf)?.name || `S${m.ghostCopyOf}`;
+                      bName = `👻(${copiedName})`;
+                    } else {
+                      bName = players.find((p) => p.seat === m.seatB)?.name || `S${m.seatB}`;
+                    }
                     return `${aName} vs ${bName}${ghostNote}`;
-                  }).join(', ')}
+                  }).join('  |  ')}
                 </span>
                 {r.eliminations.length > 0 && (
-                  <span className="text-red-400 text-xs">
-                    Eliminated: {r.eliminations.map((s) => players.find((p) => p.seat === s)?.name).join(', ')}
+                  <span style={{ color: '#ff3333', fontSize: '0.65rem' }}>
+                    -{r.eliminations.map((s) => players.find((p) => p.seat === s)?.name).join(', ')}
                   </span>
                 )}
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="flex justify-between">
-        <button
-          onClick={() => handleFinish()}
-          className="px-4 py-2 bg-surface border border-gray-600 hover:border-gray-500 text-gray-300 rounded-lg text-sm transition-colors"
-        >
-          Finish Game
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <button onClick={handleFinish} className="brutal-btn brutal-btn-sm" style={{ boxShadow: '3px 3px 0px #fff' }}>
+          FINISH GAME
         </button>
         <button
           onClick={handleAddRound}
-          disabled={!allMatchupsSet || !ghostValidationOk}
-          className={`px-6 py-2.5 rounded-lg font-medium transition-colors text-sm ${
-            allMatchupsSet && ghostValidationOk
-              ? 'bg-primary hover:bg-primary-dark text-white'
-              : 'bg-gray-700 text-gray-500 cursor-not-allowed'
-          }`}
+          disabled={!allMatchupsSet}
+          className={`brutal-btn ${allMatchupsSet ? 'brutal-btn-neon' : ''}`}
         >
-          {activePlayers.filter((p) => !eliminatedThisRound.includes(p.seat)).length <= 1
-            ? 'Finish Game'
-            : `Save Round ${currentRound} & Next`}
+          {activeNonElim.length <= 1 ? 'FINISH GAME' : `SAVE ROUND ${currentRound} →`}
         </button>
       </div>
     </div>
